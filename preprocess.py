@@ -1,14 +1,16 @@
-from sklearn.preprocessing import LabelEncoder
+
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import LabelEncoder
 
-
-def prepare_data(df):
+def prepare_data(df, is_train=True):
     """
-    Prepare dataset by handling missing values and converting categorical data to integers.
+    Prepare dataset by first dropping rows without SII (for training), handling missing values 
+    and converting categorical data to integers.
     
     Args:
         df: pandas DataFrame with the raw data
+        is_train: Boolean indicating if this is training data (if True, drops rows without SII)
     
     Returns:
         Cleaned pandas DataFrame ready for modeling with all categorical variables encoded
@@ -16,10 +18,16 @@ def prepare_data(df):
     # Make a copy to avoid modifying original data
     data = df.copy()
     
+    # For training data, drop rows without SII values
+    if is_train:
+        data = data.dropna(subset=['sii'])
+        print(f"Dropped {len(df) - len(data)} rows without SII values")
+    
     # First identify columns with too many missing values (>70%)
     missing_percentages = data.isnull().mean()
     columns_to_drop = missing_percentages[missing_percentages > 0.7].index.tolist()
     data = data.drop(columns=columns_to_drop)
+    print(f"Dropped {len(columns_to_drop)} columns with >70% missing values: {columns_to_drop}")
     
     # Create label encoder
     le = LabelEncoder()
@@ -99,7 +107,33 @@ def prepare_data(df):
     
     return data
 
+def main():
+    # Read the data
+    train_data = pd.read_csv('data/train.csv')
+    
+    # Prepare the training data
+    cleaned_data = prepare_data(train_data, is_train=True)
 
+    cleaned_data.to_csv('test.csv')
+    
+    # Print some information about the cleaned dataset
+    print("\nShape of cleaned dataset:", cleaned_data.shape)
+    print("\nColumns in cleaned dataset:", cleaned_data.columns.tolist())
+    print("\nSample of cleaned data:\n", cleaned_data.head())
+    
+    # Verify all columns (except id) are numeric
+    non_numeric_cols = [col for col in cleaned_data.columns 
+                       if col != 'id' and not np.issubdtype(cleaned_data[col].dtype, np.number)]
+    if non_numeric_cols:
+        print("\nWarning: The following columns are not numeric:", non_numeric_cols)
+    else:
+        print("\nAll columns (except id) are successfully converted to numeric values")
+    
+    # Print summary of SII values
+    print("\nSII value distribution:")
+    print(cleaned_data['sii'].value_counts().sort_index())
+    
+    return cleaned_data
 
-if __name__=="__main__":
-    prepare_data(pd.read_csv("data/train.csv")).to_csv("data/cleaned.csv")
+if __name__ == "__main__":
+    cleaned_data = main()
