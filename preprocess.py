@@ -23,6 +23,9 @@ def prepare_data(df, is_train=True):
         data = data.dropna(subset=['sii'])
         print(f"Dropped {len(df) - len(data)} rows without SII values")
     
+    # Drop id (not useful for training)
+    data=data.drop(columns=["id"])
+    
     # First identify columns with too many missing values (>70%)
     missing_percentages = data.isnull().mean()
     columns_to_drop = missing_percentages[missing_percentages > 0.7].index.tolist()
@@ -72,7 +75,6 @@ def prepare_data(df, is_train=True):
         'Physical-Diastolic_BP',
         'Physical-HeartRate',
         'Physical-Systolic_BP',
-        'sii'  # target variable
     ]
     
     for col in numeric_columns:
@@ -107,33 +109,5 @@ def prepare_data(df, is_train=True):
     
     return data
 
-def main():
-    # Read the data
-    train_data = pd.read_csv('data/train.csv')
-    
-    # Prepare the training data
-    cleaned_data = prepare_data(train_data, is_train=True)
-
-    cleaned_data.to_csv('test.csv')
-    
-    # Print some information about the cleaned dataset
-    print("\nShape of cleaned dataset:", cleaned_data.shape)
-    print("\nColumns in cleaned dataset:", cleaned_data.columns.tolist())
-    print("\nSample of cleaned data:\n", cleaned_data.head())
-    
-    # Verify all columns (except id) are numeric
-    non_numeric_cols = [col for col in cleaned_data.columns 
-                       if col != 'id' and not np.issubdtype(cleaned_data[col].dtype, np.number)]
-    if non_numeric_cols:
-        print("\nWarning: The following columns are not numeric:", non_numeric_cols)
-    else:
-        print("\nAll columns (except id) are successfully converted to numeric values")
-    
-    # Print summary of SII values
-    print("\nSII value distribution:")
-    print(cleaned_data['sii'].value_counts().sort_index())
-    
-    return cleaned_data
-
-if __name__ == "__main__":
-    cleaned_data = main()
+if __name__=="__main__":
+    prepare_data(pd.read_csv("data/train.csv")).to_csv("data/cleaned.csv",index=False)
