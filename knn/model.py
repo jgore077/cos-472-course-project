@@ -7,7 +7,7 @@ import numpy as np
 
 
 def clean_test_data(cleaned_path: str, test_path: str) -> pd.DataFrame:
-    # Read both datasets
+       # Read both datasets
     cleaned_df = pd.read_csv(cleaned_path)
     test_df = pd.read_csv(test_path)
     
@@ -16,11 +16,15 @@ def clean_test_data(cleaned_path: str, test_path: str) -> pd.DataFrame:
     if 'sii' in reference_columns:
         reference_columns.remove('sii')
     
-    # Keep only columns that exist in cleaned data
-    test_df = test_df[['id'] + [col for col in reference_columns if col in test_df.columns]]
+    # Create a copy of test_df with all necessary columns
+    df_encoded = test_df[['id']].copy()
     
-    # Create a copy to avoid modifying the original DataFrame
-    df_encoded = test_df.copy()
+    # Add all columns from reference_columns to df_encoded
+    for col in reference_columns:
+        if col in test_df.columns:
+            df_encoded[col] = test_df[col]
+        else:
+            df_encoded[col] = np.nan
     
     # Function to check if a column contains strings
     def contains_strings(column):
@@ -32,7 +36,7 @@ def clean_test_data(cleaned_path: str, test_path: str) -> pd.DataFrame:
     string_columns = []
     
     for column in reference_columns:
-        if column in df_encoded.columns and column != 'id':
+        if column != 'id':
             if contains_strings(cleaned_df[column]):
                 string_columns.append(column)
             else:
@@ -40,30 +44,28 @@ def clean_test_data(cleaned_path: str, test_path: str) -> pd.DataFrame:
     
     # Fill numeric missing values with means from cleaned data
     for column, mean_value in numeric_means.items():
-        if column in df_encoded.columns:
-            df_encoded[column] = pd.to_numeric(df_encoded[column], errors='coerce')
-            df_encoded[column] = df_encoded[column].fillna(mean_value)
+        df_encoded[column] = pd.to_numeric(df_encoded[column], errors='coerce')
+        df_encoded[column] = df_encoded[column].fillna(mean_value)
     
     # Handle string columns
     le = LabelEncoder()
     for column in string_columns:
-        if column in df_encoded.columns:
-            # Convert values to strings and handle NaN values
-            cleaned_values = cleaned_df[column].fillna('').astype(str)
-            test_values = df_encoded[column].fillna('').astype(str)
-            
-            # Combine unique values from both datasets
-            all_values = pd.concat([cleaned_values, test_values]).unique()
-            
-            # Fit encoder on all unique values
-            le.fit(all_values)
-            
-            # Transform values in test set
-            df_encoded[column] = le.transform(test_values)
-            
-            # Convert column to numeric
-            df_encoded[column] = pd.to_numeric(df_encoded[column])
-    
+        # Convert values to strings and handle NaN values
+        cleaned_values = cleaned_df[column].fillna('').astype(str)
+        test_values = df_encoded[column].fillna('').astype(str)
+        
+        # Combine unique values from both datasets
+        all_values = pd.concat([cleaned_values, test_values]).unique()
+        
+        # Fit encoder on all unique values
+        le.fit(all_values)
+        
+        # Transform values in test set
+        df_encoded[column] = le.transform(test_values)
+        
+        # Convert column to numeric
+        df_encoded[column] = pd.to_numeric(df_encoded[column])
+  
     return df_encoded
 
 class KNNModel:
@@ -149,19 +151,8 @@ class KNNModel:
         # Prepare the test data using the same preparation function
         prepared_test=clean_test_data("data/cleaned.csv",test_path)
         
-        # Ensure we have all the necessary features in the same order
-        missing_cols = set(self.feature_columns) - set(prepared_test.columns)
-        for col in missing_cols:
-            prepared_test[col] = 0  # Fill with 0 for missing columns
-            
-        # Select and order columns to match training data
-        X_test = prepared_test[self.feature_columns]
-        
-        # Scale the features
-        X_test_scaled = self.scaler.transform(X_test)
-        
         # Make predictions
-        predictions = self.model.predict(X_test_scaled)
+        predictions = self.model.predict(prepared_test.drop(columns="id"))
         
         # Round predictions to nearest integer and clip to valid range [0, 3]
         predictions = np.clip(np.round(predictions), 0, 3)
